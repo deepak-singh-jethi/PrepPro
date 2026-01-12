@@ -417,12 +417,11 @@ updateSubSubjects: () => {
         topicSelect.appendChild(placeholder);
 
         // Sort and Add Topics
-        const sortedTopics = [...subject.sub].sort((a, b) => a.localeCompare(b));
-        
-        sortedTopics.forEach(topic => {
+     subject.sub.forEach((topic, index) => {
             const option = document.createElement("option");
             option.value = topic;
-            option.text = topic;
+            // VISUAL CHANGE: Shows as "1. Introduction", "2. Chapter 1", etc.
+            option.text = `${index + 1}. ${topic}`; 
             topicSelect.appendChild(option);
         });
     } else {

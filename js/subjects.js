@@ -54,16 +54,24 @@ export const subjectOps = {
     activeGrid.innerHTML = "";
     const displayList = showAll ? filteredActive : filteredActive.slice(0, LIMIT);
     displayList.forEach(topic => {
+
+      const realIndex = sub.sub.indexOf(topic) + 1;
+      
       const usageCount = app.data.tasks.filter(t => t.subject === sub.name && t.subSubject === topic).length;
+      
+      // ADDED: Delete Button logic is in the button group below
       activeGrid.insertAdjacentHTML("beforeend", `
                 <div class="flex justify-between items-center p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl group hover:border-primary/50 transition-colors shadow-sm">
                     <div class="min-w-0 flex-1">
-                        <div class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate pr-2" title="${topic}">${escapeHTML(topic)}</div>
-                        <div class="text-[10px] text-gray-400 font-mono">${usageCount} tasks</div>
+                        <div class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate pr-2" title="${topic}">
+                            <span class="text-gray-400 font-mono mr-1">${realIndex}.</span> ${escapeHTML(topic)}
+                        </div>
+                        <div class="text-[10px] text-gray-400 font-mono pl-6">${usageCount} tasks</div>
                     </div>
                     <div class="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onclick="window.subjActions.renameTopic('${topic}')" class="p-2 text-gray-400 hover:text-primary transition-colors bg-gray-50 dark:bg-gray-700 rounded-lg" title="Rename"><i class="fas fa-pencil-alt text-xs"></i></button>
                         <button onclick="window.subjActions.archiveTopic('${topic}')" class="p-2 text-gray-400 hover:text-amber-500 transition-colors bg-gray-50 dark:bg-gray-700 rounded-lg" title="Archive"><i class="fas fa-archive text-xs"></i></button>
+                        <button onclick="window.subjActions.deleteTopic('${topic}')" class="p-2 text-gray-400 hover:text-red-500 transition-colors bg-gray-50 dark:bg-gray-700 rounded-lg" title="Delete"><i class="fas fa-trash-alt text-xs"></i></button>
                     </div>
                 </div>
             `);
@@ -121,7 +129,8 @@ export const subjectOps = {
       }
       return;
     }
-    sub.sub.unshift(name);
+    sub.sub.push(name);
+    
     app.saveData();
     input.value = "";
     subjectOps.renderFocusList();
@@ -147,6 +156,46 @@ export const subjectOps = {
       subjectOps.renderFocusList();
     }
   },
+  // --- NEW: DELETE TOPIC FUNCTION ---
+  deleteTopic: async topicName => {
+    const app = getApp();
+    const sub = app.data.subjects.find(s => s.id === app.data.focusSubjectId);
+    
+    // 1. Check if a Timer is active for this topic
+    if (app.data.activeTimer) {
+        const currentTask = app.data.tasks.find(t => t.id === app.data.activeTimer.id);
+        if (currentTask && currentTask.subject === sub.name && currentTask.subSubject === topicName) {
+             const msg = `⚠️ SESSION IN PROGRESS\n\nYou are currently studying "${topicName}".\n\nStop the timer and delete this topic?`;
+             if (await uiConfirm(msg)) {
+                 app.stopTimer(true); // Silent stop
+             } else {
+                 return; // User cancelled
+             }
+        }
+    }
+
+    // 2. Confirm Deletion
+    // We check for associated tasks to give a helpful warning, though we only delete the topic definition.
+    const taskCount = app.data.tasks.filter(t => t.subject === sub.name && t.subSubject === topicName).length;
+    const msg = taskCount > 0 
+        ? `Delete "${topicName}"?\n\nThis topic is referenced in ${taskCount} tasks.\nDeleting it removes it from this list, but past task history will remain.` 
+        : `Delete "${topicName}"?\n\nThis action cannot be undone.`;
+
+    if (await uiConfirm(msg)) {
+        // Remove from active list
+        sub.sub = sub.sub.filter(t => t !== topicName);
+        
+        // Remove from archive list (sanity check)
+        if (sub.archivedSub) {
+            sub.archivedSub = sub.archivedSub.filter(t => t !== topicName);
+        }
+
+        app.saveData();
+        subjectOps.renderFocusList();
+    }
+  },
+  // ----------------------------------
+  
   archiveTopic: async name => {
     const app = getApp();
     const sub = app.data.subjects.find(s => s.id === app.data.focusSubjectId);
